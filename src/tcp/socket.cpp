@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <netinet/tcp.h>
 #include <cstring>
+#include <sys/socketvar.h>
 
 using namespace swechat;
 
@@ -33,7 +34,7 @@ TCPSocket::TCPSocket()
 TCPSocket::TCPSocket(int socket_desc)
 {
     this->socket_desc = socket_desc;
-    InitSocket();
+    initSocket();
 }
 
 void TCPSocket::Send(BinMsg msg)
@@ -64,7 +65,7 @@ BinMsg TCPSocket::Recv()
     return msg;
 }
 
-void TCPSocket::InitSocket()
+void TCPSocket::initSocket()
 {
     int flag = 1; 
     setsockopt(socket_desc, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));

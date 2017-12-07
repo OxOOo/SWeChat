@@ -30,7 +30,7 @@ bool TCPClient::Connect()
     LOG_ERROR_IF(connect_rst < 0) << "Error to connect server : " << strerror(errno);
     if (connect_rst < 0) return false;
 
-    InitSocket();
+    initSocket();
 
     return true;
 }
