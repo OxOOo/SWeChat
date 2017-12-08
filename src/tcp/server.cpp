@@ -9,6 +9,7 @@ using namespace swechat;
 TCPServer::TCPServer(string address, int port, int backlog)
     : address(address), port(port), backlog(backlog), socket_desc(-1)
 {
+    socket_id_min = 0;
 }
 
 TCPServer::~TCPServer()
@@ -62,7 +63,8 @@ TCPSocket::ptr TCPServer::WaitSocket()
     char *client_ip = inet_ntoa(client.sin_addr);
     int client_port = ntohs(client.sin_port);
 
-    TCPSocket::ptr client_ptr = make_shared<TCPSocket>(new_socket);
+    TCPSocket::ptr client_ptr = make_shared<TCPSocket>(new_socket, socket_id_min);
+    socket_id_min ++;
     return client_ptr;
 }
 

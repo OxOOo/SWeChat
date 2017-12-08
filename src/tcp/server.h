@@ -29,6 +29,7 @@ namespace swechat
         int port;
         int backlog;
         int socket_desc;
+        int socket_id_min;
     };
 }
 

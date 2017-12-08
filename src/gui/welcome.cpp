@@ -1,16 +1,27 @@
 #include "welcome.h"
+#include "chat/client.h"
 #include <QDesktopWidget>
 #include <QApplication>
 #include <QFormLayout>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QSpacerItem>
+#include <QTimer>
+#include <thread>
 
 using namespace swechat;
 
 WelcomeWindow::WelcomeWindow()
 {
     initUI();
+
+    last_msg_time = QDateTime::currentDateTime();
+    msg_timer = new QTimer(this);
+    connect(msg_timer, &QTimer::timeout, [=]() {
+        if (last_msg_time.msecsTo(QDateTime::currentDateTime()) > 1000)
+            msg_label->setText("正常");
+    });
+    msg_timer->start(200);
 }
 
 WelcomeWindow::~WelcomeWindow()
@@ -42,9 +53,50 @@ void WelcomeWindow::initUI()
     v_layout->addLayout(f_layout);
     v_layout->addSpacerItem(new QSpacerItem(10, 10, QSizePolicy::Minimum, QSizePolicy::Expanding));
     v_layout->addLayout(h_layout);
+    v_layout->addWidget(msg_label = new QLabel(this));
 
     setLayout(v_layout);
 
     password_edit->setEchoMode(QLineEdit::Password);
     username_edit->setFocus();
+    msg_label->setText("正常");
+    msg_label->show();
+
+    connect(login_btn, &QPushButton::clicked, [this]() {
+        showMsg("登录ing");
+        ChatClient::instance()->Connect(address_edit->text().toStdString(), [this](bool success) {
+            if (success) {
+                ChatClient::instance()->Login(username_edit->text().toStdString(), password_edit->text().toStdString(), [this](bool success) {
+                    if (!success) {
+                        ChatClient::instance()->Close();
+                    } else {
+                        ChatClient::instance()->Close();
+                    }
+                });
+            }
+        });
+    });
+    connect(register_btn, &QPushButton::clicked, [this]() {
+        showMsg("注册ing");
+        ChatClient::instance()->Connect(address_edit->text().toStdString(), [this](bool success) {
+            if (success) {
+                ChatClient::instance()->Register(username_edit->text().toStdString(), password_edit->text().toStdString(), [this](bool success) {
+                    ChatClient::instance()->Close();
+                    showMsg("注册成功");
+                });
+            }
+        });
+    });
+    ChatClient::instance()->BindMsg([this](string msg) {
+        showMsg(msg.c_str());
+    });
+    ChatClient::instance()->BindError([this](string msg) {
+        showMsg(msg.c_str());
+    });
+}
+
+void WelcomeWindow::showMsg(QString msg)
+{
+    msg_label->setText(msg);
+    last_msg_time = QDateTime::currentDateTime();
 }

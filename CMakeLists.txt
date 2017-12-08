@@ -20,7 +20,7 @@ include_directories(plog/include)
 include_directories(json11)
 add_compile_options(--std=c++11 -fPIC)
 
-set(MODULES tcp chat)
+set(MODULES tcp chat database)
 set(CPP_SOURCES )
 
 foreach(M ${MODULES})

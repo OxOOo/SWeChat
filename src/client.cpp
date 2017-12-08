@@ -2,6 +2,7 @@
 #include <plog/Log.h>
 #include <plog/Appenders/ColorConsoleAppender.h>
 #include <QApplication>
+#include "chat/client.h"
 #include "gui/welcome.h"
 
 using namespace std;
@@ -13,6 +14,7 @@ int main(int argc, char* argv[])
     plog::init(plog::debug, &consoleAppender);
 
     QApplication app(argc, argv);
+    ChatClient::createInstance();
 
     WelcomeWindow welcome;
     welcome.show();

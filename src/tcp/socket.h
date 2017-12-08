@@ -32,7 +32,9 @@ namespace swechat
 
     public:
         TCPSocket();
-        TCPSocket(int socket_desc);
+        TCPSocket(int socket_desc, int id);
+
+        const int id;
 
     protected:
         void initSocket();

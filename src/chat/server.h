@@ -1,8 +1,13 @@
 #ifndef CHAT_SERVER_H
 #define CHAT_SERVER_H
 
+#include <functional>
 #include <memory>
+#include <thread>
+#include <map>
 #include "tcp/server.h"
+#include "database/db.h"
+#include "queue.h"
 
 namespace swechat
 {
@@ -23,6 +28,10 @@ namespace swechat
 
     private:
         TCPServer::ptr server;
+        shared_ptr<DB> db;
+        Queue<function<void()>> task_que;
+        thread process_thread;
+        map<int, thread> socket_threads;
 
         void processSocket(TCPSocket::ptr socket);
     };

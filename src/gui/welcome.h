@@ -4,6 +4,9 @@
 #include <QWidget>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QLabel>
+#include <QTimer>
+#include <QDateTime>
 
 namespace swechat
 {
@@ -17,12 +20,16 @@ namespace swechat
 
     private:
         void initUI();
+        void showMsg(QString msg);
 
         QLineEdit* address_edit;
         QLineEdit* username_edit;
         QLineEdit* password_edit;
         QPushButton* login_btn;
         QPushButton* register_btn;
+        QLabel* msg_label;
+        QTimer* msg_timer;
+        QDateTime last_msg_time;
     };
 }
 

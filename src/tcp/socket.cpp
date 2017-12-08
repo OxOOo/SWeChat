@@ -17,8 +17,9 @@ BinMsg swechat::CreateMsg()
 BinMsg swechat::CreateMsg(string string_msg)
 {
     auto msg = make_shared<vector<char>>();
-    msg->resize(string_msg.length());
+    msg->resize(string_msg.length()+1);
     memcpy(msg->data(), string_msg.data(), string_msg.length());
+    msg->at(string_msg.length()) = '\0';
     return msg;
 }
 
@@ -27,11 +28,12 @@ TCPSocket::~TCPSocket()
 }
 
 TCPSocket::TCPSocket()
-    : socket_desc(-1)
+    : socket_desc(-1), id(-1)
 {
 }
 
-TCPSocket::TCPSocket(int socket_desc)
+TCPSocket::TCPSocket(int socket_desc, int id)
+    : id(id)
 {
     this->socket_desc = socket_desc;
     initSocket();
@@ -54,7 +56,7 @@ BinMsg TCPSocket::Recv()
     int len;
     auto len_rst = recv(socket_desc, &len, sizeof(int), MSG_WAITALL);
     LOG_ERROR_IF(len_rst < 0) << "ERROR on recv len : " << strerror(errno);
-    if (len_rst < 0) return nullptr;
+    if (len_rst <= 0) return nullptr;
 
     BinMsg msg = CreateMsg();
     msg->resize(len);
