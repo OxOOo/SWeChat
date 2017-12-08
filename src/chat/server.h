@@ -30,10 +30,17 @@ namespace swechat
         TCPServer::ptr server;
         shared_ptr<DB> db;
         Queue<function<void()>> task_que;
-        thread process_thread;
+        thread process_thread; // 工作线程
+
         map<int, thread> socket_threads;
+        map<int, User::ptr> logined_users;
+        map<string, int> logined_accounts;
+        map<int, TCPSocket::ptr> sockets;
 
         void processSocket(TCPSocket::ptr socket);
+        void sendUsersTo(int socket_id);
+        void sendFriendsTo(int socket_id);
+        void Boardcast();
     };
 }
 

@@ -4,6 +4,7 @@
 #include <cassert>
 #include <thread>
 #include <json11.hpp>
+#include <chrono>
 
 using namespace json11;
 using namespace swechat;
@@ -52,13 +53,17 @@ void ChatServer::Run()
 void ChatServer::processSocket(TCPSocket::ptr socket)
 {
     LOG_DEBUG << "processing new socket";
+    task_que.Push([=]() {
+        sockets[socket->id] = socket;
+    });
+
     while(true)
     {
         BinMsg msg = socket->Recv();
         if (msg == nullptr)
         {
             socket->Close();
-            return;
+            break;
         }
         LOG_INFO << msg->data();
 
@@ -73,7 +78,13 @@ void ChatServer::processSocket(TCPSocket::ptr socket)
                         {"command", COMMAND_LOGIN_RES},
                         {"success", true}
                     };
+                    for(auto x : logined_users) {
+                        if (x.second->username == data["username"].string_value()) sockets[x.first]->Close(); // 强制下线
+                    }
+                    logined_users[socket->id] = db->FindUser(data["username"].string_value());
+                    logined_accounts[data["username"].string_value()] = socket->id;
                     socket->Send(res.dump());
+                    Boardcast();
                 } else {
                     Json res = Json::object {
                         {"command", COMMAND_LOGIN_RES},
@@ -93,6 +104,7 @@ void ChatServer::processSocket(TCPSocket::ptr socket)
                         {"success", true}
                     };
                     socket->Send(res.dump());
+                    Boardcast();
                 } else {
                     Json res = Json::object {
                         {"command", COMMAND_REGISTER_RES},
@@ -104,7 +116,56 @@ void ChatServer::processSocket(TCPSocket::ptr socket)
                 return;
             }
 
+            if (data["command"] == COMMAND_FLASH) {
+                sendUsersTo(socket->id);
+                sendFriendsTo(socket->id);
+                return;
+            }
+
             LOG_ERROR << "Unknow command : " << data.dump();
         });
+    }
+
+    task_que.Push([=]() {
+        socket_threads[socket->id].join();
+
+        socket_threads.erase(socket_threads.find(socket->id));
+        sockets.erase(sockets.find(socket->id));
+        if (logined_users.find(socket->id) != logined_users.end()) {
+            logined_accounts.erase(logined_accounts.find(logined_users[socket->id]->username));
+            logined_users.erase(logined_users.find(socket->id));
+        }
+
+        Boardcast();
+    });
+
+    LOG_DEBUG << "socket " << socket->id << " exit";
+}
+
+void ChatServer::sendUsersTo(int socket_id)
+{
+    task_que.Push([=]() {
+        Json::array users;
+        for(int i = 0; i < db->Users().size(); i ++) {
+            users.push_back(Json::object {
+                {"username", db->Users()[i]->username},
+                {"online", logined_accounts.find(db->Users()[i]->username) != logined_accounts.end()}
+            });
+        }
+        Json data = Json::object {
+            {"command", COMMAND_USERS},
+            {"users", users}
+        };
+        sockets[socket_id]->Send(data.dump());
+    });
+}
+void ChatServer::sendFriendsTo(int socket_id)
+{
+
+}
+void ChatServer::Boardcast()
+{
+    for(auto x : logined_users) {
+        sendUsersTo(x.first);
     }
 }

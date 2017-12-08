@@ -18,7 +18,7 @@ find_package(Threads)
 add_subdirectory(json11)
 include_directories(plog/include)
 include_directories(json11)
-add_compile_options(--std=c++11 -fPIC)
+add_compile_options(--std=c++14 -fPIC)
 
 set(MODULES tcp chat database)
 set(CPP_SOURCES )

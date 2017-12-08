@@ -4,6 +4,7 @@
 #include <QApplication>
 #include "chat/client.h"
 #include "gui/welcome.h"
+#include "gui/main.h"
 
 using namespace std;
 using namespace swechat;
@@ -17,7 +18,14 @@ int main(int argc, char* argv[])
     ChatClient::createInstance();
 
     WelcomeWindow welcome;
-    welcome.show();
+    int rst = welcome.exec();
+    if (rst == 0)
+    {
+        return 0;
+    }
+
+    MainWindow w;
+    w.show();
 
     return app.exec();
 }

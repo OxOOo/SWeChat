@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include "user.h"
+#include "friend_ship.h"
 
 namespace swechat
 {
@@ -20,16 +21,24 @@ namespace swechat
 
         void Load();
         void Save();
+        void TriggerModify();
     
     public:
         rst_t Login(string username, string password);
         rst_t Register(string username, string password);
+        User::ptr FindUser(string username);
+        const vector<User::ptr>& Users();
+
+        vector<User::ptr> Friends(User::ptr u);
+        FriendShip::ptr FindShip(User::ptr u1, User::ptr u2);
+        rst_t CreateFriend(User::ptr u1, User::ptr u2);
     
     private:
         string dbFile(string filename);
 
         string db_path;
         vector<User::ptr> users;
+        vector<FriendShip::ptr> ships;
     };
 }
 

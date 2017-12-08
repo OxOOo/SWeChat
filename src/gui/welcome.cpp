@@ -14,12 +14,14 @@ using namespace swechat;
 WelcomeWindow::WelcomeWindow()
 {
     initUI();
+    done_rst = -1;
 
     last_msg_time = QDateTime::currentDateTime();
     msg_timer = new QTimer(this);
     connect(msg_timer, &QTimer::timeout, [=]() {
         if (last_msg_time.msecsTo(QDateTime::currentDateTime()) > 1000)
             msg_label->setText("正常");
+        if (done_rst != -1) done(done_rst);
     });
     msg_timer->start(200);
 }
@@ -37,8 +39,8 @@ void WelcomeWindow::initUI()
 
     QFormLayout* f_layout = new QFormLayout();
     f_layout->addRow("地址：", address_edit = new QLineEdit("127.0.0.1"));
-    f_layout->addRow("用户名：", username_edit = new QLineEdit());
-    f_layout->addRow("密码：", password_edit = new QLineEdit());
+    f_layout->addRow("用户名：", username_edit = new QLineEdit("admin")); // fixme
+    f_layout->addRow("密码：", password_edit = new QLineEdit("123")); // fixme
     f_layout->setSpacing(10);
     f_layout->setMargin(10);
     f_layout->setLabelAlignment(Qt::AlignRight);
@@ -61,6 +63,7 @@ void WelcomeWindow::initUI()
     username_edit->setFocus();
     msg_label->setText("正常");
     msg_label->show();
+    login_btn->setDefault(true);
 
     connect(login_btn, &QPushButton::clicked, [this]() {
         showMsg("登录ing");
@@ -70,7 +73,7 @@ void WelcomeWindow::initUI()
                     if (!success) {
                         ChatClient::instance()->Close();
                     } else {
-                        ChatClient::instance()->Close();
+                        done_rst = 1;
                     }
                 });
             }
@@ -82,7 +85,7 @@ void WelcomeWindow::initUI()
             if (success) {
                 ChatClient::instance()->Register(username_edit->text().toStdString(), password_edit->text().toStdString(), [this](bool success) {
                     ChatClient::instance()->Close();
-                    showMsg("注册成功");
+                    showMsg("注册成功，可以登录");
                 });
             }
         });
