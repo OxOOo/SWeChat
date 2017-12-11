@@ -5,6 +5,9 @@
 #include <QSpacerItem>
 #include <QMessageBox>
 #include <QDebug>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QProgressDialog>
 
 using namespace swechat;
 
@@ -57,10 +60,12 @@ void ChatWidget::initUI()
     msg_browser = new QTextBrowser(this);
     msg_edit = new QTextEdit(this);
     send_btn = new QPushButton("发送", this);
+    file_btn = new QPushButton("传输文件", this);
 
     msg_browser->setReadOnly(true);
 
     QHBoxLayout* btn_layout = new QHBoxLayout();
+    btn_layout->addWidget(file_btn);
     btn_layout->addSpacerItem(new QSpacerItem(10, 10, QSizePolicy::Expanding, QSizePolicy::Minimum));
     btn_layout->addWidget(send_btn);
 
@@ -75,6 +80,36 @@ void ChatWidget::initUI()
 
 void ChatWidget::initBind()
 {
+    connect(file_btn, &QPushButton::clicked, [=]() {
+        QString filepath = QFileDialog::getOpenFileName(this, "传输文件");
+        if (filepath == "") return;
+        QString filename = QFileInfo(filepath).fileName();
+        QMessageBox* m = new QMessageBox(this);
+        m->setText("等待对方确认");
+        m->setWindowTitle("传输文件");
+        m->setModal(true);
+        m->show();
+        ChatClient::instance()->SendFile(username.toStdString(), filename.toStdString(), [=](bool success) {
+            m->deleteLater();
+            if (success)
+            {
+                main_task_que.push_back([=]() {
+                    QMessageBox* p = new QMessageBox(this);
+                    p->setText("文件传输中");
+                    p->setWindowTitle("文件传输中");
+                    p->setModal(true);
+                    p->show();
+                    ChatClient::instance()->StartSendFile(filepath.toStdString(), [=](int sent, int total) {
+                    }, [=]() {
+                        main_task_que.push_back([=]() {
+                            p->deleteLater();
+                            QMessageBox::information(this, "文件传输完成", "文件传输完成");
+                        });
+                    });
+                });
+            }
+        });
+    });
     connect(send_btn, &QPushButton::clicked, [=]() {
         QString msg = msg_edit->toPlainText();
         if (msg.length() == 0) {
@@ -104,6 +139,37 @@ void ChatWidget::initBind()
                 msg_browser->clear();
                 for(int i = 0; i < messages.size(); i ++)
                     appendMesssage(messages[i]);
+            }
+        });
+    });
+    ChatClient::instance()->BindFile([=](string username, string filename, auto accept_cb) {
+        main_task_que.push_back([=]() {
+            if (QMessageBox::question(this,
+                "传输文件",
+                QString::fromStdString("来自[ "+username+" ]对' "+filename+" '的文件传输请求，是否接收？"),
+                QMessageBox::Yes|QMessageBox::No, QMessageBox::Yes) == QMessageBox::Yes) {
+                QString filepath = QFileDialog::getSaveFileName(this, "传输文件");
+                if (filepath == "") {
+                    accept_cb(false);
+                    return;
+                }
+                accept_cb(true);
+                main_task_que.push_back([=]() {
+                    QMessageBox* p = new QMessageBox(this);
+                    p->setText("文件传输中");
+                    p->setWindowTitle("文件传输中");
+                    p->setModal(true);
+                    p->show();
+                    ChatClient::instance()->StartRecvFile(filepath.toStdString(), [=](int sent, int total) {
+                    }, [=]() {
+                        main_task_que.push_back([=]() {
+                            p->deleteLater();
+                            QMessageBox::information(this, "文件传输完成", "文件传输完成");
+                        });
+                    });
+                });
+            } else {
+                accept_cb(false);
             }
         });
     });

@@ -38,6 +38,8 @@ ChatClient::ChatClient()
             task();
         }
     });
+
+    com_file_client = make_shared<FileClient>();
 }
 
 void ChatClient::BindMsg(string_cb_t msg_cb)
@@ -149,8 +151,21 @@ void ChatClient::RecvLoop()
                 chat_msg_cb(data["username"].string_value(), msg);
                 continue;
             }
+            if (data["command"] == COMMAND_SEND_FILE_REQ_S2C) {
+                file_cb(data["username"].string_value(), data["filename"].string_value(), [=](bool accept) {
+                    task_que.Push([=]() {
+                        Json::object obj = Json::object {
+                            {"command", COMMAND_SEND_FILE_RES_C2S},
+                            {"username", data["username"]},
+                            {"accept", accept}
+                        };
+                        file_client->Send(Json(obj).dump());
+                    });
+                });
+                continue;
+            }
 
-            LOG_ERROR << "Unknow msg : " << data.dump();
+            LOG_ERROR << "Unknown msg : " << data.dump();
         }
     });
 }
@@ -223,13 +238,15 @@ void ChatClient::RejectMsg(string username, int msg_id)
 void ChatClient::Connect(string address, next_cb_t next_cb)
 {
     task_que.Push([=]() {
-        client = TCPClient::ptr(new TCPClient(address, SERVER_PORT));
+        client = make_shared<TCPClient>(address, SERVER_PORT);
         if (!client->Connect()) {
             err_cb("连接服务器失败");
             next_cb(false);
             return;
         }
         next_cb(true);
+        file_client = make_shared<TCPClient>(address, FILE_SERVER_PORT);
+        file_client->Connect();
     });
 }
 
@@ -243,14 +260,18 @@ void ChatClient::Close()
 void ChatClient::Login(string username, string password, next_cb_t next_cb)
 {
     task_que.Push([=] {
-        Json data = Json::object {
+        Json::object obj = Json::object {
             {"command", COMMAND_LOGIN},
             {"username", username},
             {"password", password}
         };
-        client->Send(data.dump());
-        Json res = waitForCommand(COMMAND_LOGIN_RES);
+        client->Send(Json(obj).dump());
+        Json res = waitForCommand(COMMAND_LOGIN_RES, client);
         if (res["success"].bool_value()) {
+            logined_username = username;
+            logined_password = password;
+            obj["command"] = COMMAND_FILED_LOGIN;
+            file_client->Send(Json(obj).dump());
             next_cb(true);
         } else {
             err_cb(res["msg"].string_value());
@@ -268,7 +289,7 @@ void ChatClient::Register(string username, string password, next_cb_t next_cb)
             {"password", password}
         };
         client->Send(data.dump());
-        Json res = waitForCommand(COMMAND_REGISTER_RES);
+        Json res = waitForCommand(COMMAND_REGISTER_RES, client);
         if (res["success"].bool_value()) {
             next_cb(true);
         } else {
@@ -278,11 +299,51 @@ void ChatClient::Register(string username, string password, next_cb_t next_cb)
     });
 }
 
-Json ChatClient::waitForCommand(string command_type)
+void ChatClient::SendFile(string username, string filename, next_cb_t next_cb)
+{
+    task_que.Push([=]() {
+        Json data = Json::object {
+            {"command", COMMAND_SEND_FILE_REQ_C2S},
+            {"username", username},
+            {"filename", filename}
+        };
+        file_client->Send(data.dump());
+        Json res = waitForCommand(COMMAND_SEND_FILE_RES_S2C, file_client);
+        next_cb(res["accept"].bool_value());
+        if (!res["accept"].bool_value()) {
+            err_cb(res["msg"].string_value());
+        }
+    });
+}
+
+void ChatClient::BindFile(file_cb_t file_cb)
+{
+    this->file_cb = file_cb;
+}
+
+void ChatClient::StartSendFile(string send_filename, FileClient::progress_cb_t progress_cb, FileClient::finished_cb_t finished_cb)
+{
+    Json res = waitForCommand(COMMAND_SEND_FILE_PORT, file_client);
+    int port = res["port"].int_value();
+    com_file_client->SendFile(port, send_filename, progress_cb, finished_cb);
+}
+void ChatClient::StartRecvFile(string save_filename, FileClient::progress_cb_t progress_cb, FileClient::finished_cb_t finished_cb)
+{
+    Json res = waitForCommand(COMMAND_SEND_FILE_PORT, file_client);
+    int port = res["port"].int_value();
+    com_file_client->RecvFile(port, save_filename, progress_cb, finished_cb);
+}
+
+string ChatClient::LoginedUsername()
+{
+    return logined_username;
+}
+
+Json ChatClient::waitForCommand(string command_type, TCPClient::ptr c)
 {
     while(true)
     {
-        BinMsg msg = client->Recv();
+        BinMsg msg = c->Recv();
         string err;
         Json data = Json::parse(msg->data(), err);
         if (data["command"] == command_type) return data;

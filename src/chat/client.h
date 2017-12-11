@@ -7,6 +7,7 @@
 #include <json11.hpp>
 #include "queue.h"
 #include "tcp/client.h"
+#include "file_client.h"
 
 namespace swechat
 {
@@ -42,6 +43,7 @@ namespace swechat
         typedef function<void(vector<user_t>)> users_cb_t;
         typedef function<void(string,message_t)> chat_msg_cb_t;
         typedef function<void(string,vector<message_t>)> chat_msgs_cb_t;
+        typedef function<void(string username, string filename, next_cb_t)> file_cb_t;
 
         void BindMsg(string_cb_t msg_cb);
         void UnbindMsg();
@@ -67,6 +69,13 @@ namespace swechat
         void RejectMsg(string username, int msg_id); // 未接受消息
 
     public:
+        void SendFile(string username, string filename, next_cb_t next_cb);
+        void BindFile(file_cb_t file_cb);
+
+        void StartSendFile(string send_filename, FileClient::progress_cb_t progress_cb, FileClient::finished_cb_t finished_cb);
+        void StartRecvFile(string save_filename, FileClient::progress_cb_t progress_cb, FileClient::finished_cb_t finished_cb);
+
+    public:
         // 连接服务器
         void Connect(string address, next_cb_t next_cb);
 
@@ -78,16 +87,21 @@ namespace swechat
         // 注册
         void Register(string username, string password, next_cb_t next_cb);
 
+        string LoginedUsername();
+
     private:
-        TCPClient::ptr client;
+        TCPClient::ptr client, file_client;
+        FileClient::ptr com_file_client;
+        string logined_username, logined_password;
         thread io_thread, loop_thread;
         Queue<function<void()>> task_que;
         string_cb_t msg_cb, err_cb;
         users_cb_t users_cb, friends_cb;
         chat_msg_cb_t chat_msg_cb;
         chat_msgs_cb_t chat_msgs_cb;
+        file_cb_t file_cb;
 
-        Json waitForCommand(string command_type);
+        Json waitForCommand(string command_type, TCPClient::ptr c);
     };
 }
 

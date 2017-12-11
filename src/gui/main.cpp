@@ -44,7 +44,7 @@ void MainWindow::initUI()
     move((desktop->width() - this->width()) / 2, (desktop->height() - this->height()) / 2);
 
     QVBoxLayout* right_layout = new QVBoxLayout();
-    right_layout->addWidget(name_label = new QLabel("我的名字"));
+    right_layout->addWidget(name_label = new QLabel(QString::fromStdString("我的名字：" + ChatClient::instance()->LoginedUsername())));
     // right_layout->addSpacerItem(new QSpacerItem(10, 10, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
     QTabWidget* tab_widget = new QTabWidget(this);
@@ -83,31 +83,35 @@ void MainWindow::initBind()
 {
     ChatClient::instance()->BindMsg([=](string msg) {
         main_task_que.push_back([=]() {
-            statusBar()->showMessage(QString::fromStdString(msg), 1000);
+            statusBar()->showMessage(QString::fromStdString(msg), 2000);
         });
     });
     ChatClient::instance()->BindError([=](string msg) {
         main_task_que.push_back([=]() {
-            statusBar()->showMessage(QString::fromStdString(msg), 1000);
+            statusBar()->showMessage(QString::fromStdString(msg), 2000);
         });
     });
     ChatClient::instance()->BindUsers([=](vector<user_t> users) {
-        this->users = users;
-        users_list_view->clear();
-        for(int i = 0; i < users.size(); i ++) {
-            QString text = QString::fromStdString(users[i].username);
-            text += users[i].online ? "[o]" : "[x]";
-            users_list_view->addItem(text);
-        }
+        main_task_que.push_back([=]() {
+            this->users = users;
+            users_list_view->clear();
+            for(int i = 0; i < users.size(); i ++) {
+                QString text = QString::fromStdString(users[i].username);
+                text += users[i].online ? "[o]" : "[x]";
+                users_list_view->addItem(text);
+            }
+        });
     });
     ChatClient::instance()->BindFriends([=](vector<user_t> friends) {
-        this->friends = friends;
-        friends_list_view->clear();
-        for(int i = 0; i < friends.size(); i ++) {
-            QString text = QString::fromStdString(friends[i].username);
-            text += friends[i].online ? "[o]" : "[x]";
-            if (friends[i].unread) text += "(" + QString::number(friends[i].unread) + ")";
-            friends_list_view->addItem(text);
-        }
+        main_task_que.push_back([=]() {
+            this->friends = friends;
+            friends_list_view->clear();
+            for(int i = 0; i < friends.size(); i ++) {
+                QString text = QString::fromStdString(friends[i].username);
+                text += friends[i].online ? "[o]" : "[x]";
+                if (friends[i].unread) text += "(" + QString::number(friends[i].unread) + ")";
+                friends_list_view->addItem(text);
+            }
+        });
     });
 }

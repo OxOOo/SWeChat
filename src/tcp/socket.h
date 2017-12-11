@@ -14,6 +14,7 @@ namespace swechat
 
     BinMsg CreateMsg();
     BinMsg CreateMsg(string string_msg);
+    BinMsg CreateMsg(void* ptr, int len);
 
     // 套接字，不对外公开构造函数
     class TCPSocket

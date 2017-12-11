@@ -23,6 +23,14 @@ BinMsg swechat::CreateMsg(string string_msg)
     return msg;
 }
 
+BinMsg swechat::CreateMsg(void* ptr, int len)
+{
+    auto msg = make_shared<vector<char>>();
+    msg->resize(len);
+    memcpy(msg->data(), ptr, len);
+    return msg;
+}
+
 TCPSocket::~TCPSocket()
 {
 }

@@ -38,6 +38,7 @@ namespace swechat
         QTextBrowser* msg_browser;
         QTextEdit* msg_edit;
         QPushButton* send_btn;
+        QPushButton* file_btn;
     };
 }
 

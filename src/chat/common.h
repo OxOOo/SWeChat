@@ -5,6 +5,8 @@
 #define SERVER_ADDRESS "0.0.0.0"
 #define SERVER_PORT 8888
 
+#define FILE_SERVER_PORT 8889 // 文件服务器
+
 #define COMMAND_ERROR "error" // {msg: string}
 #define COMMAND_MSG "msg" // {msg: string}
 
@@ -26,5 +28,14 @@
 #define COMMAND_NEW_MSG "new_msg" // {username: string, id: int, msg: string, datetime: string, sender: string, read: boolean}
 #define COMMAND_ACCEPT_MSG "accept_msg" // {username: string, id: int}
 #define COMMAND_REJECT_MSG "reject_msg" // {username: string, id: int}
+
+// 文件
+#define COMMAND_FILED_LOGIN "filed_login" // {username: string, password: string}
+// #define COMMAND_FILED_LOGIN_RES "filed_login_res" // {success: boolean, msg: string}
+#define COMMAND_SEND_FILE_REQ_C2S "send_file_req_c2s" // {username: string, filename: string}
+#define COMMAND_SEND_FILE_REQ_S2C "send_file_req_s2c" // {username: string, filename: string}
+#define COMMAND_SEND_FILE_RES_C2S "send_file_res_c2s" // {username: string, accept: boolean}
+#define COMMAND_SEND_FILE_RES_S2C "send_file_res_s2c" // {username: string, accept: boolean, msg: string}
+#define COMMAND_SEND_FILE_PORT "send_file_port" // {port: int}
 
 #endif // CHAT_COMMON_H

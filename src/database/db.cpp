@@ -1,4 +1,5 @@
 #include "db.h"
+#include <plog/Log.h>
 #include <sys/stat.h>
 #include <string>
 #include <fstream>
@@ -217,6 +218,6 @@ string DB::currentDateTime()
     time(&rawtime);
     timeinfo = localtime(&rawtime);
 
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %I:%M:%S", timeinfo);
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
     return string(buffer);
 }

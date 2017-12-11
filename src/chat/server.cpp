@@ -30,8 +30,12 @@ ChatServer::ChatServer()
 
 void ChatServer::Run()
 {
-    server = TCPServer::ptr(new TCPServer(SERVER_ADDRESS, SERVER_PORT));
+    server = make_shared<TCPServer>(SERVER_ADDRESS, SERVER_PORT);
+    file_server = make_shared<TCPServer>(SERVER_ADDRESS, FILE_SERVER_PORT);
+    com_file_server = make_shared<FileServer>();
+
     assert(server->Listen());
+    assert(file_server->Listen());
 
     process_thread = thread([=]() {
         while(true)
@@ -41,13 +45,31 @@ void ChatServer::Run()
         }
     });
 
-    while(true)
-    {
-        TCPSocket::ptr socket = server->WaitSocket();
-        socket_threads[socket->id] =  thread([this, socket]() {
-            this->processSocket(socket);
-        });
-    }
+    thread server_thread = thread([=]() {
+        while(true)
+        {
+            TCPSocket::ptr socket = server->WaitSocket();
+            task_que.Push([=]() {
+                socket_threads[socket->id] =  thread([this, socket]() {
+                    this->processSocket(socket);
+                });
+            });
+        }
+    });
+    thread file_server_thread = thread([=]() {
+        while(true)
+        {
+            TCPSocket::ptr socket = file_server->WaitSocket();
+            task_que.Push([=]() {
+                file_socket_threads[socket->id] =  thread([this, socket]() {
+                    this->processFileSocket(socket);
+                });
+            });
+        }
+    });
+
+    server_thread.join();
+    file_server_thread.join();
 }
 
 void ChatServer::processSocket(TCPSocket::ptr socket)
@@ -174,7 +196,7 @@ void ChatServer::processSocket(TCPSocket::ptr socket)
                 return;
             }
 
-            LOG_ERROR << "Unknow command : " << data.dump();
+            LOG_ERROR << "Unknown command : " << data.dump();
         });
     }
 
@@ -282,4 +304,91 @@ void ChatServer::Boardcast()
         sendUsersTo(x.first);
         sendFriendsTo(x.first);
     }
+}
+
+void ChatServer::processFileSocket(TCPSocket::ptr socket)
+{
+    LOG_DEBUG << "[file]processing new socket";
+    while(true)
+    {
+        BinMsg msg = socket->Recv();
+        if (msg == nullptr)
+        {
+            socket->Close();
+            break;
+        }
+        LOG_INFO << "[file]" << msg->data();
+
+        string err;
+        Json data = Json::parse(msg->data(), err);
+        task_que.Push([=]() {
+            if (data["command"] == COMMAND_FILED_LOGIN) {
+                rst_t rst = db->Login(data["username"].string_value(), data["password"].string_value());
+                if (rst == nullptr) {
+                    User::ptr u = db->FindUser(data["username"].string_value());
+                    file_socket_users[socket->id] = u;
+                    file_sockets[data["username"].string_value()] = socket;
+                }
+                return;
+            }
+            if (data["command"] == COMMAND_SEND_FILE_REQ_C2S) {
+                string username = data["username"].string_value();
+                if (file_sockets.find(username) == file_sockets.end()) {
+                    Json::object obj = Json::object {
+                        {"command", COMMAND_SEND_FILE_RES_S2C},
+                        {"accept", false},
+                        {"msg", "对方不在线"}
+                    };
+                    socket->Send(Json(obj).dump());
+                } else {
+                    Json::object obj = Json::object {
+                        {"command", COMMAND_SEND_FILE_REQ_S2C},
+                        {"username", file_socket_users[socket->id]->username},
+                        {"filename", data["filename"]}
+                    };
+                    sockets[logined_accounts[username]]->Send(Json(obj).dump());
+                }
+
+                return;
+            }
+            if (data["command"] == COMMAND_SEND_FILE_RES_C2S) {
+                string username = data["username"].string_value();
+                Json::object obj = Json::object {
+                    {"command", COMMAND_SEND_FILE_RES_S2C},
+                    {"accept", data["accept"]},
+                };
+                if (!obj["accept"].bool_value()) {
+                    obj["msg"] = "对方不同意";
+                }
+                file_sockets[username]->Send(Json(obj).dump());
+                if (obj["accept"].bool_value()) {
+                    int port = com_file_server->CreateFileServer();
+                    socket->Send(Json(Json::object {
+                        {"command", COMMAND_SEND_FILE_PORT},
+                        {"port", port}
+                    }).dump());
+                    file_sockets[username]->Send(Json(Json::object {
+                        {"command", COMMAND_SEND_FILE_PORT},
+                        {"port", port}
+                    }).dump());
+                }
+                return;
+            }
+
+            LOG_ERROR << "[file]Unknown command : " << data.dump();
+        });
+    }
+
+    task_que.Push([=]() {
+        file_socket_threads[socket->id].join();
+        file_socket_threads.erase(file_socket_threads.find(socket->id));
+
+        if (file_socket_users.find(socket->id) != file_socket_users.end()) {
+            auto u = file_socket_users[socket->id];
+            file_socket_users.erase(file_socket_users.find(socket->id));
+            file_sockets.erase(file_sockets.find(u->username));
+        }
+    });
+
+    LOG_DEBUG << "[file]socket " << socket->id << " exit";
 }
