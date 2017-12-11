@@ -38,8 +38,11 @@ namespace swechat
         map<int, TCPSocket::ptr> sockets;
 
         void processSocket(TCPSocket::ptr socket);
+        void sendMsgTo(TCPSocket::ptr socket, string msg);
+        void sendErrorTo(TCPSocket::ptr socket, string msg);
         void sendUsersTo(int socket_id);
         void sendFriendsTo(int socket_id);
+        void sendChatMessagesTo(int socket_id, string username);
         void Boardcast();
     };
 }

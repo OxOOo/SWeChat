@@ -28,6 +28,8 @@ ChatClient::ChatClient()
     UnbindError();
     UnbindUsers();
     UnbindFriends();
+    UnbindChatMsg();
+    UnbindChatMsgs();
 
     io_thread = thread([=]() {
         while(true)
@@ -70,6 +72,22 @@ void ChatClient::UnbindFriends()
 {
     this->friends_cb = [](auto){};
 }
+void ChatClient::BindChatMsg(chat_msg_cb_t chat_msg_cb)
+{
+    this->chat_msg_cb = chat_msg_cb;
+}
+void ChatClient::UnbindChatMsg()
+{
+    this->chat_msg_cb = [](auto,auto){};
+}
+void ChatClient::BindChatMsgs(chat_msgs_cb_t chat_msgs_cb)
+{
+    this->chat_msgs_cb = chat_msgs_cb;
+}
+void ChatClient::UnbindChatMsgs()
+{
+    this->chat_msgs_cb = [](auto,auto){};
+}
 
 void ChatClient::RecvLoop()
 {
@@ -78,6 +96,8 @@ void ChatClient::RecvLoop()
             BinMsg msg = client->Recv();
             string err;
             Json data = Json::parse(msg->data(), err);
+
+            LOG_DEBUG << msg->data();
 
             if (data["command"] == COMMAND_ERROR) {
                 err_cb(data["msg"].string_value());
@@ -91,7 +111,7 @@ void ChatClient::RecvLoop()
                 vector<user_t> users;
                 auto users_data = data["users"].array_items();
                 for(int i = 0; i < users_data.size(); i ++) {
-                    users.push_back((user_t){users_data[i]["username"].string_value(), users_data[i]["online"].bool_value()});
+                    users.push_back((user_t){users_data[i]["username"].string_value(), users_data[i]["online"].bool_value(), users_data[i]["unread"].int_value()});
                 }
                 users_cb(users);
                 continue;
@@ -100,9 +120,33 @@ void ChatClient::RecvLoop()
                 vector<user_t> friends;
                 auto friends_data = data["friends"].array_items();
                 for(int i = 0; i < friends_data.size(); i ++) {
-                    friends.push_back((user_t){friends_data[i]["username"].string_value(), friends_data[i]["online"].bool_value()});
+                    friends.push_back((user_t){friends_data[i]["username"].string_value(), friends_data[i]["online"].bool_value(), friends_data[i]["unread"].int_value()});
                 }
                 friends_cb(friends);
+                continue;
+            }
+            if (data["command"] == COMMAND_MSGS) {
+                vector<message_t> messages;
+                auto messages_data = data["msgs"].array_items();
+                for(int i = 0; i < messages_data.size(); i ++) {
+                    messages.push_back((message_t){
+                        messages_data[i]["id"].int_value(),
+                        messages_data[i]["sender"].string_value(),
+                        messages_data[i]["msg"].string_value(),
+                        messages_data[i]["datetime"].string_value(),
+                    });
+                }
+                chat_msgs_cb(data["username"].string_value(), messages);
+                continue;
+            }
+            if (data["command"] == COMMAND_NEW_MSG) {
+                message_t msg = (message_t) {
+                    data["id"].int_value(),
+                    data["sender"].string_value(),
+                    data["msg"].string_value(),
+                    data["datetime"].string_value(),
+                };
+                chat_msg_cb(data["username"].string_value(), msg);
                 continue;
             }
 
@@ -116,6 +160,61 @@ void ChatClient::Flash()
     task_que.Push([=]() {
         Json data = Json::object {
             {"command", COMMAND_FLASH},
+        };
+        client->Send(data.dump());
+    });
+}
+
+void ChatClient::AddFriend(string username)
+{
+    task_que.Push([=]() {
+        Json data = Json::object {
+            {"command", COMMAND_ADD_FRIEND},
+            {"username", username}
+        };
+        client->Send(data.dump());
+    });
+}
+
+void ChatClient::QueryMsgs(string username)
+{
+    task_que.Push([=]() {
+        Json data = Json::object {
+            {"command", COMMAND_QUERY_MSGS},
+            {"username", username}
+        };
+        client->Send(data.dump());
+    });
+}
+void ChatClient::SendMsg(string username, string msg)
+{
+    task_que.Push([=]() {
+        Json data = Json::object {
+            {"command", COMMAND_SEND_MSG},
+            {"username", username},
+            {"msg", msg}
+        };
+        client->Send(data.dump());
+    });
+}
+void ChatClient::AcceptMsg(string username, int msg_id)
+{
+    task_que.Push([=]() {
+        Json data = Json::object {
+            {"command", COMMAND_ACCEPT_MSG},
+            {"username", username},
+            {"id", msg_id}
+        };
+        client->Send(data.dump());
+    });
+}
+void ChatClient::RejectMsg(string username, int msg_id)
+{
+    task_que.Push([=]() {
+        Json data = Json::object {
+            {"command", COMMAND_REJECT_MSG},
+            {"username", username},
+            {"id", msg_id}
         };
         client->Send(data.dump());
     });

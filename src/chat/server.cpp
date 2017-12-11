@@ -122,6 +122,58 @@ void ChatServer::processSocket(TCPSocket::ptr socket)
                 return;
             }
 
+            if (data["command"] == COMMAND_ADD_FRIEND) {
+                rst_t rst = db->CreateFriend(logined_users[socket->id], db->FindUser(data["username"].string_value()));
+                if (rst != nullptr) {
+                    sendErrorTo(socket, *rst);
+                } else {
+                    sendMsgTo(socket, "添加好友成功");
+                    sendFriendsTo(socket->id);
+                    if (logined_accounts.find(data["username"].string_value()) != logined_accounts.end())
+                        sendFriendsTo(logined_accounts[data["username"].string_value()]);
+                }
+                return;
+            }
+
+            if (data["command"] == COMMAND_QUERY_MSGS) {
+                sendChatMessagesTo(socket->id, data["username"].string_value());
+                return;
+            }
+            if (data["command"] == COMMAND_SEND_MSG) {
+                auto ship = db->FindShip(logined_users[socket->id], db->FindUser(data["username"].string_value()));
+                auto m = db->CreateMessage(ship, logined_users[socket->id]->username, data["msg"].string_value());
+                Json::object obj = m->to_json().object_items();
+                obj["command"] = COMMAND_NEW_MSG;
+                obj["username"] = data["username"];
+                socket->Send(Json(obj).dump());
+                if (logined_accounts.find(data["username"].string_value()) != logined_accounts.end()) {
+                    obj["username"] = logined_users[socket->id]->username.c_str();
+                    sockets[logined_accounts[data["username"].string_value()]]->Send(Json(obj).dump());
+                }
+                return;
+            }
+            if (data["command"] == COMMAND_ACCEPT_MSG) {
+                string username = data["username"].string_value();
+                int msg_id = data["id"].int_value();
+                auto ship = db->FindShip(logined_users[socket->id], db->FindUser(username));
+                LOG_DEBUG << logined_users[socket->id]->username << " " << db->FindUser(username)->username << " " << msg_id;
+                for(int i = 0; i < ship->messages.size(); i ++) {
+                    if (ship->messages[i]->id == msg_id) {
+                        ship->messages[i]->read = true;
+                    }
+                }
+                db->TriggerModify();
+                return;
+            }
+            if (data["command"] == COMMAND_REJECT_MSG) {
+                string username = data["username"].string_value();
+                int msg_id = data["id"].int_value();
+                if (logined_accounts.find(username) != logined_accounts.end()) {
+                    sendFriendsTo(socket->id);
+                }
+                return;
+            }
+
             LOG_ERROR << "Unknow command : " << data.dump();
         });
     }
@@ -142,6 +194,28 @@ void ChatServer::processSocket(TCPSocket::ptr socket)
     LOG_DEBUG << "socket " << socket->id << " exit";
 }
 
+void ChatServer::sendMsgTo(TCPSocket::ptr socket, string msg)
+{
+    task_que.Push([=]() {
+        Json data = Json::object {
+            {"command", COMMAND_MSG},
+            {"msg", msg}
+        };
+        socket->Send(data.dump());
+    });
+}
+
+void ChatServer::sendErrorTo(TCPSocket::ptr socket, string msg)
+{
+    task_que.Push([=]() {
+        Json data = Json::object {
+            {"command", COMMAND_ERROR},
+            {"msg", msg}
+        };
+        socket->Send(data.dump());
+    });
+}
+
 void ChatServer::sendUsersTo(int socket_id)
 {
     task_que.Push([=]() {
@@ -154,18 +228,58 @@ void ChatServer::sendUsersTo(int socket_id)
         }
         Json data = Json::object {
             {"command", COMMAND_USERS},
-            {"users", users}
+            {"users", users},
+            {"unread", 0}
         };
         sockets[socket_id]->Send(data.dump());
     });
 }
 void ChatServer::sendFriendsTo(int socket_id)
 {
-
+    task_que.Push([=]() {
+        Json::array friends;
+        string myname = logined_users[socket_id]->username;
+        for(auto u : db->Friends(logined_users[socket_id])) {
+            int unread = 0;
+            for(auto x : db->FindShip(logined_users[socket_id], u)->messages) {
+                if (x->sender != myname && !x->read) unread ++;
+            }
+            friends.push_back(Json::object {
+                {"username", u->username},
+                {"online", logined_accounts.find(u->username) != logined_accounts.end()},
+                {"unread", unread}
+            });
+        }
+        Json data = Json::object {
+            {"command", COMMAND_FRIENDS},
+            {"friends", friends}
+        };
+        sockets[socket_id]->Send(data.dump());
+    });
+}
+void ChatServer::sendChatMessagesTo(int socket_id, string username)
+{
+    task_que.Push([=]() {
+        FriendShip::ptr ship = db->FindShip(logined_users[socket_id], db->FindUser(username));
+        Json::array msgs;
+        for(int i = 0; i < ship->messages.size(); i ++) {
+            msgs.push_back(ship->messages[i]->to_json());
+            if (ship->messages[i]->sender == username) ship->messages[i]->read = true;
+        };
+        Json data = Json::object {
+            {"command", COMMAND_MSGS},
+            {"username", username},
+            {"msgs", msgs}
+        };
+        db->TriggerModify();
+        sockets[socket_id]->Send(data.dump());
+        sendFriendsTo(socket_id);
+    });
 }
 void ChatServer::Boardcast()
 {
     for(auto x : logined_users) {
         sendUsersTo(x.first);
+        sendFriendsTo(x.first);
     }
 }

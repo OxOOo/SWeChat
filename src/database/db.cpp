@@ -4,6 +4,7 @@
 #include <fstream>
 #include <streambuf>
 #include <cassert>
+#include <ctime>
 
 using namespace swechat;
 using namespace std;
@@ -89,6 +90,12 @@ FriendShip::ptr DB::FindShip(User::ptr u1, User::ptr u2)
 
 rst_t DB::CreateFriend(User::ptr u1, User::ptr u2)
 {
+    if (u1 == nullptr || u2 == nullptr) {
+        return make_shared<string>("用户不存在");
+    }
+    if (u1->username == u2->username) {
+        return make_shared<string>("不能添加自己为好友");
+    }
     FriendShip::ptr s = FindShip(u1, u2);
     if (s != nullptr) {
         return make_shared<string>("已经是好友");
@@ -102,8 +109,34 @@ rst_t DB::CreateFriend(User::ptr u1, User::ptr u2)
     return nullptr;
 }
 
+Message::ptr DB::CreateMessage(FriendShip::ptr ship, string sender, string msg)
+{
+    Message::ptr m = make_shared<Message>();
+    m->id = global_msg_id ++;
+    m->sender = sender;
+    m->msg = msg;
+    m->datetime = currentDateTime();
+    m->read = false;
+    ship->messages.push_back(m);
+
+    Save();
+    return m;
+}
+
 void DB::Load()
 {
+    {
+        global_msg_id = 0;
+        ifstream fd(dbFile("vars.json"));
+        if (fd) {
+            string str((istreambuf_iterator<char>(fd)), istreambuf_iterator<char>());
+            string err;
+            Json data = Json::parse(str, err);
+            assert(data.is_object());
+            global_msg_id = data["global_msg_id"].int_value();
+        }
+    }
+
     {
         users.clear();
         ifstream fd(dbFile("users.json"));
@@ -137,6 +170,14 @@ void DB::Save()
     mkdir(db_path.c_str(), 0755);
 
     {
+        ofstream fd(dbFile("vars.json"));
+        Json data = Json::object {
+            {"global_msg_id", global_msg_id}
+        };
+        fd << data.dump();
+    }
+
+    {
         ofstream fd(dbFile("users.json"));
         Json::array arr;
         for(auto u: users) {
@@ -165,4 +206,17 @@ string DB::dbFile(string filename)
     if (db_path[db_path.length()-1] == '/')
         return db_path + filename;
     return db_path + "/" + filename;
+}
+
+string DB::currentDateTime()
+{
+    time_t rawtime;
+    struct tm * timeinfo;
+    char buffer[1024];
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %I:%M:%S", timeinfo);
+    return string(buffer);
 }

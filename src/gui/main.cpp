@@ -8,6 +8,7 @@
 #include <QTabWidget>
 #include <QStatusBar>
 #include <QDebug>
+#include <QMessageBox>
 
 using namespace swechat;
 
@@ -18,6 +19,16 @@ MainWindow::MainWindow()
 
     ChatClient::instance()->RecvLoop();
     ChatClient::instance()->Flash();
+
+    timer = new QTimer(this);
+    connect(timer, &QTimer::timeout, [=]() {
+        if (!main_task_que.isEmpty()) {
+            auto task = main_task_que.head();
+            main_task_que.pop_front();
+            task();
+        }
+    });
+    timer->start(200);
 }
 
 MainWindow::~MainWindow()
@@ -46,7 +57,7 @@ void MainWindow::initUI()
     tab_widget->setSizePolicy(tab_size_policy);
 
     QHBoxLayout* main_layout = new QHBoxLayout();
-    main_layout->addWidget(chat = new ChatWidget("未知", this), 3);
+    main_layout->addWidget(chat = new ChatWidget(this), 3);
     // main_layout->addSpacerItem(new QSpacerItem(10, 10, QSizePolicy::Expanding, QSizePolicy::Minimum));
     main_layout->addLayout(right_layout, 1);
 
@@ -56,28 +67,29 @@ void MainWindow::initUI()
     central_widget->setLayout(main_layout);
 
     connect(friends_list_view, &QListWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
-        qDebug() << item->text() << " " << friends_list_view->currentRow();
+        QString username = QString::fromStdString(friends[friends_list_view->currentRow()].username);
+        chat->setUser(username);
+        chat->setEnabled(true);
     });
     connect(users_list_view, &QListWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
-        qDebug() << item->text();
+        QString username = QString::fromStdString(users[users_list_view->currentRow()].username);
+        if (QMessageBox::question(this, "好友请求确认", "确定添加[" + username + "]为好友？", QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes) == QMessageBox::Yes) {
+            ChatClient::instance()->AddFriend(username.toStdString());
+        }
     });
-
-    friends_list_view->addItem("好友1");
-    friends_list_view->addItem("好友2");
-    friends_list_view->addItem("好友3");
-
-    users_list_view->addItem("用户1");
-    users_list_view->addItem("用户2");
-    users_list_view->addItem("用户3");
 }
 
 void MainWindow::initBind()
 {
     ChatClient::instance()->BindMsg([=](string msg) {
-        statusBar()->showMessage(QString::fromStdString(msg));
+        main_task_que.push_back([=]() {
+            statusBar()->showMessage(QString::fromStdString(msg), 1000);
+        });
     });
     ChatClient::instance()->BindError([=](string msg) {
-        statusBar()->showMessage(QString::fromStdString(msg));
+        main_task_que.push_back([=]() {
+            statusBar()->showMessage(QString::fromStdString(msg), 1000);
+        });
     });
     ChatClient::instance()->BindUsers([=](vector<user_t> users) {
         this->users = users;
@@ -86,6 +98,16 @@ void MainWindow::initBind()
             QString text = QString::fromStdString(users[i].username);
             text += users[i].online ? "[o]" : "[x]";
             users_list_view->addItem(text);
+        }
+    });
+    ChatClient::instance()->BindFriends([=](vector<user_t> friends) {
+        this->friends = friends;
+        friends_list_view->clear();
+        for(int i = 0; i < friends.size(); i ++) {
+            QString text = QString::fromStdString(friends[i].username);
+            text += friends[i].online ? "[o]" : "[x]";
+            if (friends[i].unread) text += "(" + QString::number(friends[i].unread) + ")";
+            friends_list_view->addItem(text);
         }
     });
 }

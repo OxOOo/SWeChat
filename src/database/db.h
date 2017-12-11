@@ -32,13 +32,16 @@ namespace swechat
         vector<User::ptr> Friends(User::ptr u);
         FriendShip::ptr FindShip(User::ptr u1, User::ptr u2);
         rst_t CreateFriend(User::ptr u1, User::ptr u2);
+        Message::ptr CreateMessage(FriendShip::ptr ship, string sender, string msg);
     
     private:
         string dbFile(string filename);
+        string currentDateTime();
 
         string db_path;
         vector<User::ptr> users;
         vector<FriendShip::ptr> ships;
+        int global_msg_id;
     };
 }
 

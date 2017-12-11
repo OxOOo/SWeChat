@@ -1,9 +1,16 @@
 #ifndef GUI_CHAT_H
 #define GUI_CHAT_H
 
+#include "chat/client.h"
+#include <functional>
 #include <QString>
 #include <QWidget>
-#include "chat/client.h"
+#include <QTextBrowser>
+#include <QTextEdit>
+#include <QPushButton>
+#include <QLabel>
+#include <QTimer>
+#include <QQueue>
 
 namespace swechat
 {
@@ -12,13 +19,25 @@ namespace swechat
     class ChatWidget : public QWidget
     {
     public:
-        ChatWidget(QString target_user, QWidget* parent = NULL);
+        ChatWidget(QWidget* parent = NULL);
         ~ChatWidget();
+
+        void setUser(QString username);
     
     private:
+        void appendMesssage(message_t message);
+
         void initUI();
+        void initBind();
+
+        QTimer* timer;
+        QQueue<function<void()> > main_task_que;
         
-        QString target_user;
+        QString username;
+        QLabel* title_label;
+        QTextBrowser* msg_browser;
+        QTextEdit* msg_edit;
+        QPushButton* send_btn;
     };
 }
 

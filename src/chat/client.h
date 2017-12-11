@@ -17,6 +17,14 @@ namespace swechat
     {
         string username;
         bool online;
+        int unread;
+    };
+    struct message_t
+    {
+        int id;
+        string sender;
+        string msg;
+        string datetime;
     };
 
     class ChatClient
@@ -32,6 +40,8 @@ namespace swechat
         typedef function<void(string)> string_cb_t;
         typedef function<void(bool success)> next_cb_t; // true表示可以继续
         typedef function<void(vector<user_t>)> users_cb_t;
+        typedef function<void(string,message_t)> chat_msg_cb_t;
+        typedef function<void(string,vector<message_t>)> chat_msgs_cb_t;
 
         void BindMsg(string_cb_t msg_cb);
         void UnbindMsg();
@@ -41,9 +51,20 @@ namespace swechat
         void UnbindUsers();
         void BindFriends(users_cb_t friends_cb); // 好友列表
         void UnbindFriends();
+        void BindChatMsg(chat_msg_cb_t chat_msg_cb);
+        void UnbindChatMsg();
+        void BindChatMsgs(chat_msgs_cb_t chat_msgs_cb);
+        void UnbindChatMsgs();
 
         void RecvLoop();
         void Flash();
+
+        void AddFriend(string username); // 添加好友
+
+        void QueryMsgs(string username); // 查询消息
+        void SendMsg(string username, string msg); // 发送消息
+        void AcceptMsg(string username, int msg_id); // 接受消息
+        void RejectMsg(string username, int msg_id); // 未接受消息
 
     public:
         // 连接服务器
@@ -63,6 +84,8 @@ namespace swechat
         Queue<function<void()>> task_que;
         string_cb_t msg_cb, err_cb;
         users_cb_t users_cb, friends_cb;
+        chat_msg_cb_t chat_msg_cb;
+        chat_msgs_cb_t chat_msgs_cb;
 
         Json waitForCommand(string command_type);
     };
